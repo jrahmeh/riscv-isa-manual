@@ -68,15 +68,43 @@ include::images/wavedrom/zifencei-ff.edn[]
 
 The FENCE.I instruction is used to synchronize the instruction and data
 streams. RISC-V does not guarantee that stores to instruction memory
-will be made visible to instruction fetches on a RISC-V hart until that
+are ordered before instruction fetches on a RISC-V hart until that
 hart executes a FENCE.I instruction. A FENCE.I instruction ensures that
-a subsequent instruction fetch on a RISC-V hart will see any previous
-data stores already visible to the same RISC-V hart. FENCE.I does _not_
+all explicit memory accesses that precede the FENCE.I in program order
+are ordered before all instruction fetches that follow the FENCE.I in
+program order.
+
+FENCE.I does _not_
 ensure that other RISC-V harts' instruction fetches will observe the
 local hart's stores in a multiprocessor system. To make a store to
 instruction memory visible to all RISC-V harts, the writing hart also
 has to execute a data FENCE before requesting that all remote RISC-V
 harts execute a FENCE.I.
+
+[NOTE]
+====
+In the following litmus test, for example, the outcome `a0`=1, `a1`=0 on
+the consumer hart is forbidden, assuming little-endian RV32IC harts:
+
+```
+Initially, flag = 0.
+
+Producer hart:                                  Consumer hart:
+
+la t0, patch_me                                 la t0, flag
+li t1, 0x4585                                   lw a0, (t0)
+sh t1, (t0)   # patch_me := c.li a1, 1          fence.i
+fence w, w    # order flag write              patch_me:
+la t0, flag                                     c.li a1, 0
+li t1, 1
+sw t1, (t0)   # flag := 1
+```
+
+Note that this example is only meant to illustrate the aforementioned ordering
+property.
+In a realistic producer-consumer code-generation scheme, the consumer would loop
+until `flag` becomes 1 before executing the FENCE.I instruction.
+====
 
 The unused fields in the FENCE.I instruction, _funct12_, _rs1_, and
 _rd_, are reserved for finer-grain fences in future extensions. For
